@@ -89,4 +89,121 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// User queries
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(users);
+}
+
+// Doctor queries
+export async function getDoctorByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { doctors } = await import("../drizzle/schema");
+  const result = await db.select().from(doctors).where(eq(doctors.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getAllDoctors() {
+  const db = await getDb();
+  if (!db) return [];
+  const { doctors } = await import("../drizzle/schema");
+  return await db.select().from(doctors);
+}
+
+// Patient queries
+export async function getPatientById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { patients } = await import("../drizzle/schema");
+  const result = await db.select().from(patients).where(eq(patients.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function searchPatients(query: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const { patients } = await import("../drizzle/schema");
+  const { or, like } = await import("drizzle-orm");
+  return await db.select().from(patients).where(
+    or(
+      like(patients.name, `%${query}%`),
+      like(patients.phone, `%${query}%`)
+    )
+  );
+}
+
+export async function getAllPatients() {
+  const db = await getDb();
+  if (!db) return [];
+  const { patients } = await import("../drizzle/schema");
+  return await db.select().from(patients);
+}
+
+// Appointment queries
+export async function getAppointmentById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { appointments } = await import("../drizzle/schema");
+  const result = await db.select().from(appointments).where(eq(appointments.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getAppointmentsByDoctor(doctorId: number, date?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const { appointments } = await import("../drizzle/schema");
+  if (date) {
+    const { and } = await import("drizzle-orm");
+    const dateObj = new Date(date);
+    return await db.select().from(appointments).where(
+      and(eq(appointments.doctorId, doctorId), eq(appointments.appointmentDate, dateObj))
+    );
+  }
+  return await db.select().from(appointments).where(eq(appointments.doctorId, doctorId));
+}
+
+export async function getAppointmentsByPatient(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { appointments } = await import("../drizzle/schema");
+  return await db.select().from(appointments).where(eq(appointments.patientId, patientId));
+}
+
+// Visit notes queries
+export async function getVisitNotesByAppointment(appointmentId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { visitNotes } = await import("../drizzle/schema");
+  const result = await db.select().from(visitNotes).where(eq(visitNotes.appointmentId, appointmentId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getVisitNotesByPatient(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { visitNotes } = await import("../drizzle/schema");
+  return await db.select().from(visitNotes).where(eq(visitNotes.patientId, patientId));
+}
+
+// Logging queries
+export async function createLog(userId: number, action: string, entityType?: string, entityId?: number, details?: string) {
+  const db = await getDb();
+  if (!db) return;
+  const { logs } = await import("../drizzle/schema");
+  await db.insert(logs).values({
+    userId,
+    action,
+    entityType,
+    entityId,
+    details,
+  });
+}
