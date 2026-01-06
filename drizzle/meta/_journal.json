@@ -15,6 +15,13 @@
       "when": 1767430404463,
       "tag": "0001_aromatic_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1767601242466,
+      "tag": "0002_unique_human_fly",
+      "breakpoints": true
     }
   ]
 }

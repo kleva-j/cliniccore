@@ -18,6 +18,8 @@ import VisitNotes from "./pages/VisitNotes";
 import UserManagement from "./pages/UserManagement";
 import DoctorManagement from "./pages/DoctorManagement";
 import AuditLogs from "./pages/AuditLogs";
+import PatientLogin from "./pages/PatientLogin";
+import PatientDashboard from "./pages/PatientDashboard";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component, requiredRole }: { component: any; requiredRole?: string[] }) {
@@ -50,6 +52,17 @@ function Router() {
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="animate-spin w-8 h-8" />
       </div>
+    );
+  }
+
+  // Patient portal routes (separate from main app)
+  if (window.location.pathname.startsWith("/patient")) {
+    return (
+      <Switch>
+        <Route path="/patient/login" component={PatientLogin} />
+        <Route path="/patient/dashboard" component={PatientDashboard} />
+        <Route path="/patient/*" component={() => <PatientLogin />} />
+      </Switch>
     );
   }
 

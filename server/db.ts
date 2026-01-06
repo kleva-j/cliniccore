@@ -207,3 +207,91 @@ export async function createLog(userId: number, action: string, entityType?: str
     details,
   });
 }
+
+
+// Patient account queries
+export async function getPatientAccountByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { patientAccounts } = await import("../drizzle/schema");
+  const result = await db.select().from(patientAccounts).where(eq(patientAccounts.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getPatientAccountByPatientId(patientId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { patientAccounts } = await import("../drizzle/schema");
+  const result = await db.select().from(patientAccounts).where(eq(patientAccounts.patientId, patientId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createPatientAccount(patientId: number, userId: number, email: string, passwordHash: string) {
+  const db = await getDb();
+  if (!db) return;
+  const { patientAccounts } = await import("../drizzle/schema");
+  await db.insert(patientAccounts).values({
+    patientId,
+    userId,
+    email,
+    passwordHash,
+    isActive: 1,
+  });
+}
+
+// Patient appointment queries with doctor info
+export async function getPatientAppointmentsWithDoctor(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { appointments, doctors, patients } = await import("../drizzle/schema");
+  return await db
+    .select({
+      appointment: appointments,
+      doctor: doctors,
+      patient: patients,
+    })
+    .from(appointments)
+    .leftJoin(doctors, eq(appointments.doctorId, doctors.id))
+    .leftJoin(patients, eq(appointments.patientId, patients.id))
+    .where(eq(appointments.patientId, patientId));
+}
+
+export async function getUpcomingAppointments(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { appointments, doctors } = await import("../drizzle/schema");
+  const { and, gte, eq: eqOp } = await import("drizzle-orm");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return await db
+    .select({
+      appointment: appointments,
+      doctor: doctors,
+    })
+    .from(appointments)
+    .leftJoin(doctors, eqOp(appointments.doctorId, doctors.id))
+    .where(
+      and(
+        eqOp(appointments.patientId, patientId),
+        gte(appointments.appointmentDate, today),
+        eqOp(appointments.status, "scheduled")
+      )
+    );
+}
+
+export async function getAppointmentHistory(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { appointments, doctors, visitNotes } = await import("../drizzle/schema");
+  const { eq: eqOp } = await import("drizzle-orm");
+  return await db
+    .select({
+      appointment: appointments,
+      doctor: doctors,
+      visitNote: visitNotes,
+    })
+    .from(appointments)
+    .leftJoin(doctors, eqOp(appointments.doctorId, doctors.id))
+    .leftJoin(visitNotes, eqOp(appointments.id, visitNotes.appointmentId))
+    .where(eqOp(appointments.patientId, patientId));
+}

@@ -46,3 +46,17 @@
 - [x] Final status check
 - [ ] Create checkpoint
 - [ ] Deliver to user
+
+
+## Patient Portal Feature
+- [x] Add patient role to users table and extend schema
+- [x] Create patient_accounts table for patient login credentials
+- [x] Implement patient authentication procedures (login, register, logout)
+- [x] Add patient appointment query procedures
+- [x] Create patient login page
+- [x] Create patient dashboard with appointment history
+- [x] Create upcoming appointments view
+- [x] Create appointment detail view with doctor information
+- [x] Implement patient portal routing and protection
+- [x] Write tests for patient portal features (12 tests passing)
+- [x] All tests passing (39 total tests)

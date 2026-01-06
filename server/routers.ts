@@ -1,6 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
+import { patientPortalRouter } from "./patientPortalRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -18,6 +19,12 @@ import {
   getVisitNotesByAppointment,
   getVisitNotesByPatient,
   createLog,
+  getPatientAccountByEmail,
+  getPatientAccountByPatientId,
+  createPatientAccount,
+  getPatientAppointmentsWithDoctor,
+  getUpcomingAppointments,
+  getAppointmentHistory,
 } from "./db";
 import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and } from "drizzle-orm";
@@ -28,6 +35,7 @@ import {
   appointments,
   visitNotes,
   logs,
+  patientAccounts,
   type InsertDoctor,
   type InsertPatient,
   type InsertAppointment,
@@ -340,6 +348,7 @@ export const appRouter = router({
         return await db.select().from(logs).limit(input.limit).offset(input.offset);
       }),
   }),
+  patientPortal: patientPortalRouter,
 });
 
 export type AppRouter = typeof appRouter;

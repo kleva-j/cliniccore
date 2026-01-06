@@ -11,7 +11,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["admin", "receptionist", "doctor"]).default("receptionist").notNull(),
+  role: mysqlEnum("role", ["admin", "receptionist", "doctor", "patient"]).default("patient").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -155,6 +155,39 @@ export const visitNotesRelations = relations(visitNotes, ({ one }) => ({
 export const logsRelations = relations(logs, ({ one }) => ({
   user: one(users, {
     fields: [logs.userId],
+    references: [users.id],
+  }),
+}));
+
+
+/**
+ * Patient accounts for patient portal login.
+ * Links patients to user accounts for authentication.
+ */
+export const patientAccounts = mysqlTable("patient_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  patientId: int("patientId").notNull().unique(),
+  userId: int("userId").notNull().unique(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PatientAccount = typeof patientAccounts.$inferSelect;
+export type InsertPatientAccount = typeof patientAccounts.$inferInsert;
+
+/**
+ * Relations for patient accounts.
+ */
+export const patientAccountsRelations = relations(patientAccounts, ({ one }) => ({
+  patient: one(patients, {
+    fields: [patientAccounts.patientId],
+    references: [patients.id],
+  }),
+  user: one(users, {
+    fields: [patientAccounts.userId],
     references: [users.id],
   }),
 }));
