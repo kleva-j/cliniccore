@@ -1,0 +1,63 @@
+# Production Dockerfile - Multi-stage build
+FROM node:20-alpine AS builder
+
+# Install pnpm
+RUN npm install -g pnpm@10.4.1
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN pnpm build
+
+# Production stage
+FROM node:20-alpine AS production
+
+# Install pnpm
+RUN npm install -g pnpm@10.4.1
+
+# Create app user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S cliniccore -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
+
+# Install production dependencies only
+RUN pnpm install --frozen-lockfile --prod
+
+# Copy built application from builder stage
+COPY --from=builder --chown=cliniccore:nodejs /app/dist ./dist
+COPY --from=builder --chown=cliniccore:nodejs /app/drizzle ./drizzle
+COPY --from=builder --chown=cliniccore:nodejs /app/shared ./shared
+
+# Copy necessary config files
+COPY --chown=cliniccore:nodejs drizzle.config.ts ./
+COPY --chown=cliniccore:nodejs tsconfig.json ./
+
+# Switch to non-root user
+USER cliniccore
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start production server
+CMD ["pnpm", "start"]

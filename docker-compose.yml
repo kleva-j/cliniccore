@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  database:
+    image: mysql:8.0
+    container_name: cliniccore-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-cliniccore_root_pass}
+      MYSQL_DATABASE: ${DB_NAME:-cliniccore}
+      MYSQL_USER: ${DB_USER:-cliniccore_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-cliniccore_pass}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./drizzle:/docker-entrypoint-initdb.d:ro
+    networks:
+      - cliniccore-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-cliniccore_root_pass}"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+
+  # Application (Development)
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cliniccore-app-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: mysql://${DB_USER:-cliniccore_user}:${DB_PASSWORD:-cliniccore_pass}@database:3306/${DB_NAME:-cliniccore}
+      PORT: ${APP_PORT:-3000}
+      # Add other environment variables as needed
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-key}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/dist
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - cliniccore-network
+    profiles:
+      - dev
+
+  # Application (Production)
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: cliniccore-app-prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://${DB_USER:-cliniccore_user}:${DB_PASSWORD:-cliniccore_pass}@database:3306/${DB_NAME:-cliniccore}
+      PORT: ${APP_PORT:-3000}
+      # Add other environment variables as needed
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-key}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - cliniccore-network
+    profiles:
+      - prod
+
+  # Redis (for session storage and caching)
+  redis:
+    image: redis:7-alpine
+    container_name: cliniccore-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cliniccore-network
+    command: redis-server --appendonly yes
+    profiles:
+      - prod
+
+  # Nginx (Production reverse proxy)
+  nginx:
+    image: nginx:alpine
+    container_name: cliniccore-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app-prod
+    networks:
+      - cliniccore-network
+    profiles:
+      - prod
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  cliniccore-network:
+    driver: bridge
