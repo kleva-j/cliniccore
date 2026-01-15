@@ -1,0 +1,26 @@
+{
+    "version": 2,
+    "buildCommand": "pnpm build",
+    "installCommand": "pnpm install",
+    "framework": null,
+    "outputDirectory": "dist/public",
+    "rewrites": [
+        {
+            "source": "/api/:path*",
+            "destination": "/api"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "/api/index.ts"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/index.html"
+        }
+    ],
+    "env": {
+        "NODE_ENV": "production"
+    }
+}

@@ -57,7 +57,7 @@ This document explains how to run the ClinicCore application using Docker Compos
 
 ### Core Services
 
-- **database**: MySQL 8.0 database
+- **database**: PostgreSQL 16 database
 - **app-dev**: Development application server (profile: dev)
 - **app-prod**: Production application server (profile: prod)
 
@@ -72,7 +72,7 @@ Key environment variables (see `.env.example` for complete list):
 
 ```bash
 # Database
-DATABASE_URL=mysql://cliniccore_user:cliniccore_pass@database:3306/cliniccore
+DATABASE_URL=postgresql://cliniccore_user:cliniccore_pass@database:5432/cliniccore
 DB_PASSWORD=your-secure-password
 
 # Application
@@ -123,26 +123,26 @@ docker-compose --profile prod down
 ### Database Management
 
 ```bash
-# Access MySQL shell
-docker-compose exec database mysql -u cliniccore_user -p cliniccore
+# Access PostgreSQL shell
+docker-compose exec database psql -U cliniccore_user -d cliniccore
 
 # Backup database
-docker-compose exec database mysqldump -u cliniccore_user -p cliniccore > backup.sql
+docker-compose exec database pg_dump -U cliniccore_user cliniccore > backup.sql
 
 # Restore database
-docker-compose exec -T database mysql -u cliniccore_user -p cliniccore < backup.sql
+docker-compose exec -T database psql -U cliniccore_user -d cliniccore < backup.sql
 ```
 
 ## Data Persistence
 
 Data is persisted in Docker volumes:
 
-- `mysql_data`: Database files
+- `postgres_data`: Database files
 - `redis_data`: Redis data (production only)
 
 To backup volumes:
 ```bash
-docker run --rm -v cliniccore-main_mysql_data:/data -v $(pwd):/backup alpine tar czf /backup/mysql_backup.tar.gz -C /data .
+docker run --rm -v cliniccore-main_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres_backup.tar.gz -C /data .
 ```
 
 ## Security Considerations
@@ -174,7 +174,7 @@ docker run --rm -v cliniccore-main_mysql_data:/data -v $(pwd):/backup alpine tar
 2. **Database connection issues:**
    ```bash
    # Check database health
-   docker-compose exec database mysqladmin ping -h localhost -u root -p
+   docker-compose exec database pg_isready -U cliniccore_user -d cliniccore
    ```
 
 3. **Permission issues:**
@@ -207,9 +207,10 @@ docker-compose logs -f
 ## Performance Tuning
 
 ### Database
-- Adjust MySQL configuration in docker-compose.yml
-- Monitor slow queries
+- Adjust PostgreSQL configuration in docker-compose.yml
+- Monitor slow queries with pg_stat_statements
 - Consider read replicas for high load
+- Use connection pooling (PgBouncer) for high concurrency
 
 ### Application
 - Adjust Node.js memory limits
@@ -240,7 +241,8 @@ Consider adding monitoring services:
 
 For horizontal scaling:
 
-1. Use external database (AWS RDS, etc.)
+1. Use external database (AWS RDS PostgreSQL, Google Cloud SQL, etc.)
 2. Use external Redis (AWS ElastiCache, etc.)
 3. Deploy multiple app instances behind load balancer
 4. Use container orchestration (Kubernetes, Docker Swarm)
+5. Consider PostgreSQL-specific scaling solutions (Citus, etc.)

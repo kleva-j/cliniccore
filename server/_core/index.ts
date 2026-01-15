@@ -60,6 +60,29 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  return app;
 }
 
-startServer().catch(console.error);
+// Only start server if not in Vercel environment
+if (!process.env.VERCEL) {
+  startServer().catch(console.error);
+}
+
+// Export the app creation function for Vercel
+export async function createApp() {
+  const app = express();
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  registerOAuthRoutes(app);
+  app.use(
+    "/api/trpc",
+    createExpressMiddleware({
+      router: appRouter,
+      createContext,
+    })
+  );
+  serveStatic(app);
+  return app;
+}
+

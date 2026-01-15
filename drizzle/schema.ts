@@ -1,19 +1,24 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date } from "drizzle-orm/mysql-core";
+import { integer, pgEnum, pgTable, text, timestamp, varchar, date, serial, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+// Define enums for PostgreSQL
+export const roleEnum = pgEnum("role", ["admin", "receptionist", "doctor", "patient"]);
+export const genderEnum = pgEnum("gender", ["male", "female", "other"]);
+export const appointmentStatusEnum = pgEnum("status", ["scheduled", "completed", "cancelled", "no_show"]);
 
 /**
  * Core user table backing auth flow and role-based access control.
  * Columns use camelCase to match both database fields and generated types.
  */
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["admin", "receptionist", "doctor", "patient"]).default("patient").notNull(),
+  role: roleEnum("role").default("patient").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
@@ -24,15 +29,15 @@ export type InsertUser = typeof users.$inferInsert;
  * Doctor profiles with specialty and contact information.
  * Links to users table for authentication.
  */
-export const doctors = mysqlTable("doctors", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const doctors = pgTable("doctors", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
   specialty: varchar("specialty", { length: 255 }).notNull(),
   licenseNumber: varchar("licenseNumber", { length: 255 }),
   phone: varchar("phone", { length: 20 }),
   address: text("address"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type Doctor = typeof doctors.$inferSelect;
@@ -41,18 +46,18 @@ export type InsertDoctor = typeof doctors.$inferInsert;
 /**
  * Patient demographic data and contact information.
  */
-export const patients = mysqlTable("patients", {
-  id: int("id").autoincrement().primaryKey(),
+export const patients = pgTable("patients", {
+  id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   dateOfBirth: date("dateOfBirth").notNull(),
-  gender: mysqlEnum("gender", ["male", "female", "other"]).notNull(),
+  gender: genderEnum("gender").notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
   address: text("address"),
   email: varchar("email", { length: 320 }),
   emergencyContactName: varchar("emergencyContactName", { length: 255 }),
   emergencyContactPhone: varchar("emergencyContactPhone", { length: 20 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type Patient = typeof patients.$inferSelect;
@@ -61,17 +66,17 @@ export type InsertPatient = typeof patients.$inferInsert;
 /**
  * Appointments linking patients and doctors with time slots and status tracking.
  */
-export const appointments = mysqlTable("appointments", {
-  id: int("id").autoincrement().primaryKey(),
-  patientId: int("patientId").notNull(),
-  doctorId: int("doctorId").notNull(),
+export const appointments = pgTable("appointments", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patientId").notNull(),
+  doctorId: integer("doctorId").notNull(),
   appointmentDate: date("appointmentDate").notNull(),
   appointmentTime: varchar("appointmentTime", { length: 5 }).notNull(), // HH:MM format
-  status: mysqlEnum("status", ["scheduled", "completed", "cancelled", "no_show"]).default("scheduled").notNull(),
+  status: appointmentStatusEnum("status").default("scheduled").notNull(),
   reason: text("reason"),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type Appointment = typeof appointments.$inferSelect;
@@ -81,18 +86,18 @@ export type InsertAppointment = typeof appointments.$inferInsert;
  * Clinical visit notes created after appointment completion.
  * Stores diagnosis, treatment, prescriptions, and follow-up advice.
  */
-export const visitNotes = mysqlTable("visit_notes", {
-  id: int("id").autoincrement().primaryKey(),
-  appointmentId: int("appointmentId").notNull(),
-  doctorId: int("doctorId").notNull(),
-  patientId: int("patientId").notNull(),
+export const visitNotes = pgTable("visit_notes", {
+  id: serial("id").primaryKey(),
+  appointmentId: integer("appointmentId").notNull(),
+  doctorId: integer("doctorId").notNull(),
+  patientId: integer("patientId").notNull(),
   diagnosis: text("diagnosis"),
   treatment: text("treatment"),
   prescriptions: text("prescriptions"),
   followUp: text("followUp"),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type VisitNote = typeof visitNotes.$inferSelect;
@@ -102,12 +107,12 @@ export type InsertVisitNote = typeof visitNotes.$inferInsert;
  * Audit trail for logging system actions.
  * Captures logins, appointment modifications, and clinical note entries.
  */
-export const logs = mysqlTable("logs", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const logs = pgTable("logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
   action: varchar("action", { length: 255 }).notNull(),
   entityType: varchar("entityType", { length: 100 }),
-  entityId: int("entityId"),
+  entityId: integer("entityId"),
   details: text("details"),
   ipAddress: varchar("ipAddress", { length: 45 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -164,15 +169,15 @@ export const logsRelations = relations(logs, ({ one }) => ({
  * Patient accounts for patient portal login.
  * Links patients to user accounts for authentication.
  */
-export const patientAccounts = mysqlTable("patient_accounts", {
-  id: int("id").autoincrement().primaryKey(),
-  patientId: int("patientId").notNull().unique(),
-  userId: int("userId").notNull().unique(),
+export const patientAccounts = pgTable("patient_accounts", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patientId").notNull().unique(),
+  userId: integer("userId").notNull().unique(),
   email: varchar("email", { length: 320 }).notNull().unique(),
   passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
-  isActive: int("isActive").default(1).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type PatientAccount = typeof patientAccounts.$inferSelect;
