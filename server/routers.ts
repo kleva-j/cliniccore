@@ -1,79 +1,195 @@
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { patientPortalRouter } from "./patientPortalRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
-import { z } from "zod";
+import { patientPortalRouter } from "./patientPortalRouter";
+import { systemRouter } from "./_core/systemRouter";
+import { drizzle } from "drizzle-orm/mysql2";
 import { TRPCError } from "@trpc/server";
+import { ENV } from "./_core/env";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
+
 import {
-  getAllUsers,
-  getUserById,
-  getAllDoctors,
-  getDoctorByUserId,
+  getVisitNotesByAppointment,
+  getAppointmentsByPatient,
+  getAppointmentsByDoctor,
+  getVisitNotesByPatient,
+  getAppointmentById,
   getAllPatients,
   getPatientById,
   searchPatients,
-  getAppointmentById,
-  getAppointmentsByDoctor,
-  getAppointmentsByPatient,
-  getVisitNotesByAppointment,
-  getVisitNotesByPatient,
+  getAllDoctors,
+  getAllUsers,
+  getUserById,
   createLog,
-  getPatientAccountByEmail,
-  getPatientAccountByPatientId,
-  createPatientAccount,
-  getPatientAppointmentsWithDoctor,
-  getUpcomingAppointments,
-  getAppointmentHistory,
 } from "./db";
-import { drizzle } from "drizzle-orm/mysql2";
-import { eq, and } from "drizzle-orm";
+
 import {
-  users,
-  doctors,
-  patients,
-  appointments,
-  visitNotes,
-  logs,
-  patientAccounts,
-  type InsertDoctor,
-  type InsertPatient,
   type InsertAppointment,
   type InsertVisitNote,
+  type InsertPatient,
+  type InsertDoctor,
+  appointments,
+  visitNotes,
+  patients,
+  doctors,
+  users,
+  logs,
 } from "../drizzle/schema";
+
+import {
+  resetPasswordForEmail,
+  signInWithPassword,
+  updateUserPassword,
+  signInWithOAuth,
+  signOut,
+  signUp,
+} from "./_core/supabase";
 
 // Helper to check if user is admin
 function requireAdmin(ctx: any) {
   if (ctx.user?.role !== "admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin access required",
+    });
   }
 }
 
 // Helper to check if user is doctor
 function requireDoctor(ctx: any) {
   if (ctx.user?.role !== "doctor") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Doctor access required" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Doctor access required",
+    });
   }
 }
 
 // Helper to check if user is receptionist or admin
 function requireReceptionist(ctx: any) {
   if (ctx.user?.role !== "receptionist" && ctx.user?.role !== "admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Receptionist access required" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Receptionist access required",
+    });
   }
 }
 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+    me: publicProcedure.query(opts => opts.ctx.user),
+
+    login: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          password: z.string(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        // Check if Supabase is configured
+        if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+          const { user, session } = await signInWithPassword(
+            ctx.req as any,
+            ctx.res,
+            input.email,
+            input.password
+          );
+          return { success: true, user, session };
+        }
+        // Fallback to legacy auth during migration
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: "Supabase not configured",
+        });
+      }),
+
+    register: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          password: z.string().min(8),
+          fullName: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+          const { user, session } = await signUp(
+            ctx.req as any,
+            ctx.res,
+            input.email,
+            input.password,
+            {
+              data: { full_name: input.fullName },
+              redirectTo: `${ENV.publicAppUrl}/auth/callback`,
+            }
+          );
+          return { success: true, user, session };
+        }
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: "Supabase not configured",
+        });
+      }),
+
+    loginWithOAuth: publicProcedure
+      .input(
+        z.object({
+          provider: z.enum(["google", "github"]),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+          const { url } = await signInWithOAuth(
+            ctx.req as any,
+            ctx.res,
+            input.provider,
+            {
+              redirectTo: `${ENV.publicAppUrl}/auth/callback`,
+            }
+          );
+          return { url };
+        }
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: "Supabase not configured",
+        });
+      }),
+
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+        await signOut(ctx.req as any, ctx.res);
+      }
+      return { success: true } as const;
     }),
+
+    resetPassword: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input, ctx }) => {
+        if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+          await resetPasswordForEmail(ctx.req as any, ctx.res, input.email, {
+            redirectTo: `${ENV.publicAppUrl}/reset-password`,
+          });
+          return { success: true };
+        }
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: "Supabase not configured",
+        });
+      }),
+
+    updatePassword: protectedProcedure
+      .input(z.object({ newPassword: z.string().min(8) }))
+      .mutation(async ({ input, ctx }) => {
+        if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+          await updateUserPassword(ctx.req as any, ctx.res, input.newPassword);
+          return { success: true };
+        }
+          throw new TRPCError({
+            code: "NOT_IMPLEMENTED",
+            message: "Supabase not configured",
+          });
+      }),
   }),
 
   // User management (Admin only)
@@ -82,10 +198,12 @@ export const appRouter = router({
       requireAdmin(ctx);
       return await getAllUsers();
     }),
-    get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
-      requireAdmin(ctx);
-      return await getUserById(input.id);
-    }),
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        requireAdmin(ctx);
+        return await getUserById(input.id);
+      }),
     update: protectedProcedure
       .input(
         z.object({
@@ -96,8 +214,17 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         requireAdmin(ctx);
         const db = drizzle(process.env.DATABASE_URL!);
-        await db.update(users).set({ role: input.role }).where(eq(users.id, input.id));
-        await createLog(ctx.user.id, "UPDATE_USER_ROLE", "users", input.id, `Role changed to ${input.role}`);
+        await db
+          .update(users)
+          .set({ role: input.role })
+          .where(eq(users.id, input.id));
+        await createLog(
+          ctx.user.id,
+          "UPDATE_USER_ROLE",
+          "users",
+          input.id,
+          `Role changed to ${input.role}`
+        );
         return { success: true };
       }),
   }),
@@ -107,11 +234,17 @@ export const appRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return await getAllDoctors();
     }),
-    get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
-      const db = drizzle(process.env.DATABASE_URL!);
-      const result = await db.select().from(doctors).where(eq(doctors.id, input.id)).limit(1);
-      return result.length > 0 ? result[0] : null;
-    }),
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const db = drizzle(process.env.DATABASE_URL!);
+        const result = await db
+          .select()
+          .from(doctors)
+          .where(eq(doctors.id, input.id))
+          .limit(1);
+        return result.length > 0 ? result[0] : null;
+      }),
     create: protectedProcedure
       .input(
         z.object({
@@ -126,7 +259,13 @@ export const appRouter = router({
         requireAdmin(ctx);
         const db = drizzle(process.env.DATABASE_URL!);
         const result = await db.insert(doctors).values(input as InsertDoctor);
-        await createLog(ctx.user.id, "CREATE_DOCTOR", "doctors", undefined, `Created doctor for user ${input.userId}`);
+        await createLog(
+          ctx.user.id,
+          "CREATE_DOCTOR",
+          "doctors",
+          undefined,
+          `Created doctor for user ${input.userId}`
+        );
         return result;
       }),
     update: protectedProcedure
@@ -147,13 +286,15 @@ export const appRouter = router({
         await createLog(ctx.user.id, "UPDATE_DOCTOR", "doctors", id);
         return { success: true };
       }),
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx);
-      const db = drizzle(process.env.DATABASE_URL!);
-      await db.delete(doctors).where(eq(doctors.id, input.id));
-      await createLog(ctx.user.id, "DELETE_DOCTOR", "doctors", input.id);
-      return { success: true };
-    }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        requireAdmin(ctx);
+        const db = drizzle(process.env.DATABASE_URL!);
+        await db.delete(doctors).where(eq(doctors.id, input.id));
+        await createLog(ctx.user.id, "DELETE_DOCTOR", "doctors", input.id);
+        return { success: true };
+      }),
   }),
 
   // Patient management (Receptionist and Admin)
@@ -162,13 +303,17 @@ export const appRouter = router({
       requireReceptionist(ctx);
       return await getAllPatients();
     }),
-    get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
-      return await getPatientById(input.id);
-    }),
-    search: protectedProcedure.input(z.object({ query: z.string() })).query(async ({ input, ctx }) => {
-      requireReceptionist(ctx);
-      return await searchPatients(input.query);
-    }),
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return await getPatientById(input.id);
+      }),
+    search: protectedProcedure
+      .input(z.object({ query: z.string() }))
+      .query(async ({ input, ctx }) => {
+        requireReceptionist(ctx);
+        return await searchPatients(input.query);
+      }),
     create: protectedProcedure
       .input(
         z.object({
@@ -190,7 +335,13 @@ export const appRouter = router({
           dateOfBirth: new Date(input.dateOfBirth),
         };
         const result = await db.insert(patients).values(patientData);
-        await createLog(ctx.user.id, "CREATE_PATIENT", "patients", undefined, `Created patient ${input.name}`);
+        await createLog(
+          ctx.user.id,
+          "CREATE_PATIENT",
+          "patients",
+          undefined,
+          `Created patient ${input.name}`
+        );
         return result;
       }),
     update: protectedProcedure
@@ -218,7 +369,13 @@ export const appRouter = router({
   // Appointment management
   appointments: router({
     list: protectedProcedure
-      .input(z.object({ doctorId: z.number().optional(), patientId: z.number().optional(), date: z.string().optional() }))
+      .input(
+        z.object({
+          doctorId: z.number().optional(),
+          patientId: z.number().optional(),
+          date: z.string().optional(),
+        })
+      )
       .query(async ({ input, ctx }) => {
         if (input.doctorId) {
           return await getAppointmentsByDoctor(input.doctorId, input.date);
@@ -229,9 +386,11 @@ export const appRouter = router({
         const db = drizzle(process.env.DATABASE_URL!);
         return await db.select().from(appointments);
       }),
-    get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
-      return await getAppointmentById(input.id);
-    }),
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await getAppointmentById(input.id);
+      }),
     create: protectedProcedure
       .input(
         z.object({
@@ -265,7 +424,9 @@ export const appRouter = router({
       .input(
         z.object({
           id: z.number(),
-          status: z.enum(["scheduled", "completed", "cancelled", "no_show"]).optional(),
+          status: z
+            .enum(["scheduled", "completed", "cancelled", "no_show"])
+            .optional(),
           appointmentTime: z.string().optional(),
           reason: z.string().optional(),
           notes: z.string().optional(),
@@ -275,27 +436,50 @@ export const appRouter = router({
         requireReceptionist(ctx);
         const db = drizzle(process.env.DATABASE_URL!);
         const { id, ...updateData } = input;
-        await db.update(appointments).set(updateData).where(eq(appointments.id, id));
-        await createLog(ctx.user.id, "UPDATE_APPOINTMENT", "appointments", id, `Status: ${updateData.status}`);
+        await db
+          .update(appointments)
+          .set(updateData)
+          .where(eq(appointments.id, id));
+        await createLog(
+          ctx.user.id,
+          "UPDATE_APPOINTMENT",
+          "appointments",
+          id,
+          `Status: ${updateData.status}`
+        );
         return { success: true };
       }),
-    cancel: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
-      requireReceptionist(ctx);
-      const db = drizzle(process.env.DATABASE_URL!);
-      await db.update(appointments).set({ status: "cancelled" }).where(eq(appointments.id, input.id));
-      await createLog(ctx.user.id, "CANCEL_APPOINTMENT", "appointments", input.id);
-      return { success: true };
-    }),
+    cancel: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        requireReceptionist(ctx);
+        const db = drizzle(process.env.DATABASE_URL!);
+        await db
+          .update(appointments)
+          .set({ status: "cancelled" })
+          .where(eq(appointments.id, input.id));
+        await createLog(
+          ctx.user.id,
+          "CANCEL_APPOINTMENT",
+          "appointments",
+          input.id
+        );
+        return { success: true };
+      }),
   }),
 
   // Visit notes (Doctor only)
   visitNotes: router({
-    getByAppointment: protectedProcedure.input(z.object({ appointmentId: z.number() })).query(async ({ input }) => {
-      return await getVisitNotesByAppointment(input.appointmentId);
-    }),
-    getByPatient: protectedProcedure.input(z.object({ patientId: z.number() })).query(async ({ input }) => {
-      return await getVisitNotesByPatient(input.patientId);
-    }),
+    getByAppointment: protectedProcedure
+      .input(z.object({ appointmentId: z.number() }))
+      .query(async ({ input }) => {
+        return await getVisitNotesByAppointment(input.appointmentId);
+      }),
+    getByPatient: protectedProcedure
+      .input(z.object({ patientId: z.number() }))
+      .query(async ({ input }) => {
+        return await getVisitNotesByPatient(input.patientId);
+      }),
     create: protectedProcedure
       .input(
         z.object({
@@ -314,7 +498,13 @@ export const appRouter = router({
         const db = drizzle(process.env.DATABASE_URL!);
         const visitNoteData: InsertVisitNote = input;
         const result = await db.insert(visitNotes).values(visitNoteData);
-        await createLog(ctx.user.id, "CREATE_VISIT_NOTE", "visit_notes", undefined, `Visit note for appointment ${input.appointmentId}`);
+        await createLog(
+          ctx.user.id,
+          "CREATE_VISIT_NOTE",
+          "visit_notes",
+          undefined,
+          `Visit note for appointment ${input.appointmentId}`
+        );
         return result;
       }),
     update: protectedProcedure
@@ -332,7 +522,10 @@ export const appRouter = router({
         requireDoctor(ctx);
         const db = drizzle(process.env.DATABASE_URL!);
         const { id, ...updateData } = input;
-        await db.update(visitNotes).set(updateData).where(eq(visitNotes.id, id));
+        await db
+          .update(visitNotes)
+          .set(updateData)
+          .where(eq(visitNotes.id, id));
         await createLog(ctx.user.id, "UPDATE_VISIT_NOTE", "visit_notes", id);
         return { success: true };
       }),
@@ -341,11 +534,20 @@ export const appRouter = router({
   // Audit logs (Admin only)
   logs: router({
     list: protectedProcedure
-      .input(z.object({ limit: z.number().default(100), offset: z.number().default(0) }))
+      .input(
+        z.object({
+          limit: z.number().default(100),
+          offset: z.number().default(0),
+        })
+      )
       .query(async ({ input, ctx }) => {
         requireAdmin(ctx);
         const db = drizzle(process.env.DATABASE_URL!);
-        return await db.select().from(logs).limit(input.limit).offset(input.offset);
+        return await db
+          .select()
+          .from(logs)
+          .limit(input.limit)
+          .offset(input.offset);
       }),
   }),
   patientPortal: patientPortalRouter,

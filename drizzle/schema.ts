@@ -1,10 +1,31 @@
-import { integer, pgEnum, pgTable, text, timestamp, varchar, date, serial, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import {
+  timestamp,
+  integer,
+  pgTable,
+  varchar,
+  boolean,
+  serial,
+  pgEnum,
+  date,
+  text,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 // Define enums for PostgreSQL
-export const roleEnum = pgEnum("role", ["admin", "receptionist", "doctor", "patient"]);
+export const roleEnum = pgEnum("role", [
+  "admin",
+  "receptionist",
+  "doctor",
+  "patient",
+]);
 export const genderEnum = pgEnum("gender", ["male", "female", "other"]);
-export const appointmentStatusEnum = pgEnum("status", ["scheduled", "completed", "cancelled", "no_show"]);
+export const appointmentStatusEnum = pgEnum("status", [
+  "scheduled",
+  "completed",
+  "cancelled",
+  "no_show",
+]);
 
 /**
  * Core user table backing auth flow and role-based access control.
@@ -12,7 +33,10 @@ export const appointmentStatusEnum = pgEnum("status", ["scheduled", "completed",
  */
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  // Legacy OAuth ID (being phased out)
+  openId: varchar("openId", { length: 64 }).unique(),
+  // Supabase Auth ID (new primary identifier)
+  supabaseId: uuid("supabaseId").unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
@@ -164,7 +188,6 @@ export const logsRelations = relations(logs, ({ one }) => ({
   }),
 }));
 
-
 /**
  * Patient accounts for patient portal login.
  * Links patients to user accounts for authentication.
@@ -186,13 +209,16 @@ export type InsertPatientAccount = typeof patientAccounts.$inferInsert;
 /**
  * Relations for patient accounts.
  */
-export const patientAccountsRelations = relations(patientAccounts, ({ one }) => ({
-  patient: one(patients, {
-    fields: [patientAccounts.patientId],
-    references: [patients.id],
-  }),
-  user: one(users, {
-    fields: [patientAccounts.userId],
-    references: [users.id],
-  }),
-}));
+export const patientAccountsRelations = relations(
+  patientAccounts,
+  ({ one }) => ({
+    patient: one(patients, {
+      fields: [patientAccounts.patientId],
+      references: [patients.id],
+    }),
+    user: one(users, {
+      fields: [patientAccounts.userId],
+      references: [users.id],
+    }),
+  })
+);

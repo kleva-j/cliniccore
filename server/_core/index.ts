@@ -1,12 +1,16 @@
 import "dotenv/config";
-import express from "express";
-import { createServer } from "http";
-import net from "net";
+
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
+import { registerAuthCallbackRoutes } from "../authCallback";
 import { serveStatic, setupVite } from "./vite";
+import { registerOAuthRoutes } from "./oauth";
+import { createContext } from "./context";
+import { createServer } from "node:http";
+import { appRouter } from "../routers";
+import { ENV } from "./env";
+
+import express from "express";
+import net from "node:net";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -18,7 +22,7 @@ function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
-async function findAvailablePort(startPort: number = 3000): Promise<number> {
+async function findAvailablePort(startPort = 3000): Promise<number> {
   for (let port = startPort; port < startPort + 20; port++) {
     if (await isPortAvailable(port)) {
       return port;
@@ -33,8 +37,15 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // OAuth callback under /api/oauth/callback
+
+  // Legacy OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // Supabase Auth callback routes (if Supabase is configured)
+  if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+    registerAuthCallbackRoutes(app);
+  }
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -50,7 +61,7 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
+  const preferredPort = Number.parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
@@ -75,6 +86,12 @@ export async function createApp() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerOAuthRoutes(app);
+
+  // Supabase Auth callback routes (if Supabase is configured)
+  if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
+    registerAuthCallbackRoutes(app);
+  }
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -85,4 +102,3 @@ export async function createApp() {
   serveStatic(app);
   return app;
 }
-
