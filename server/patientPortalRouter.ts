@@ -1,131 +1,173 @@
+import type {
+  Response as ExpressResponse,
+  Request as ExpressRequest,
+} from "express";
+
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
-import { z } from "zod";
+import { signInWithPassword, signUp } from "./_core/supabase";
 import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
 import {
-  getPatientAccountByEmail,
-  getPatientAccountByPatientId,
-  createPatientAccount,
-  getPatientById,
+  getVisitNotesByAppointment,
   getUpcomingAppointments,
+  getPatientBySupabaseId,
   getAppointmentHistory,
   getAppointmentById,
-  getVisitNotesByAppointment,
 } from "./db";
-import { drizzle } from "drizzle-orm/mysql2";
-import { eq } from "drizzle-orm";
-import { users, doctors } from "../drizzle/schema";
 
 export const patientPortalRouter = router({
   register: publicProcedure
     .input(
       z.object({
-        patientId: z.number(),
         email: z.string().email(),
-        password: z.string().min(6),
+        password: z.string().min(8),
+        fullName: z.string().min(1),
+        patientData: z.object({
+          name: z.string(),
+          dateOfBirth: z.string(),
+          gender: z.enum(["male", "female", "other"]),
+          phone: z.string(),
+          address: z.string().optional(),
+          emergencyContactName: z.string().optional(),
+          emergencyContactPhone: z.string().optional(),
+        }),
       })
     )
-    .mutation(async ({ input }) => {
-      const db = drizzle(process.env.DATABASE_URL!);
+    .mutation(async ({ input, ctx }) => {
+      // Create Supabase user account
+      const { user, session } = await signUp(
+        ctx.req as unknown as ExpressRequest,
+        ctx.res as unknown as ExpressResponse,
+        input.email,
+        input.password,
+        {
+          data: {
+            full_name: input.fullName,
+            patient_data: JSON.stringify(input.patientData),
+          },
+        }
+      );
 
-      const patient = await getPatientById(input.patientId);
-      if (!patient) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Patient not found" });
-      }
-
-      const existingAccount = await getPatientAccountByEmail(input.email);
-      if (existingAccount) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
-      }
-
-      const userResult = await db.insert(users).values({
-        openId: `patient-${input.patientId}-${Date.now()}`,
-        email: input.email,
-        name: patient.name,
-        role: "patient",
-        loginMethod: "email",
-      });
-
-      const userId = userResult[0].insertId as number;
-
-      const crypto = await import("crypto");
-      const passwordHash = crypto.createHash("sha256").update(input.password).digest("hex");
-
-      await createPatientAccount(input.patientId, userId, input.email, passwordHash);
-
-      return { success: true, userId };
+      return {
+        success: true,
+        userId: user.id,
+        needsEmailConfirmation: !session,
+      };
     }),
 
   login: publicProcedure
-    .input(
-      z.object({
-        email: z.string().email(),
-        password: z.string(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const account = await getPatientAccountByEmail(input.email);
-      if (!account) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-      }
+    .input(z.object({ email: z.email(), password: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const { user } = await signInWithPassword(
+          ctx.req as unknown as ExpressRequest,
+          ctx.res as unknown as ExpressResponse,
+          input.email,
+          input.password
+        );
 
-      const crypto = await import("crypto");
-      const passwordHash = crypto.createHash("sha256").update(input.password).digest("hex");
-      if (passwordHash !== account.passwordHash) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-      }
+        // Get the patient record associated with this user
+        const patient = await getPatientBySupabaseId(user.id);
 
-      if (!account.isActive) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Account is inactive" });
+        return {
+          success: true,
+          userId: user.id,
+          patientId: patient?.id,
+          hasPatientRecord: !!patient,
+        };
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("Invalid credentials")
+        ) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid email or password",
+          });
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Login failed",
+        });
       }
-
-      return { success: true, userId: account.userId, patientId: account.patientId };
     }),
 
   getUpcomingAppointments: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user?.role !== "patient") {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Patient access required" });
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Patient access required",
+      });
     }
 
-    const account = await getPatientAccountByPatientId(ctx.user.id);
-    if (!account) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Patient account not found" });
+    // Get patient ID from user
+    const patient = await getPatientBySupabaseId(ctx.user.supabaseId ?? "");
+    if (!patient) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Patient record not found",
+      });
     }
 
-    return await getUpcomingAppointments(account.patientId);
+    return await getUpcomingAppointments(patient.id);
   }),
 
   getAppointmentHistory: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user?.role !== "patient") {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Patient access required" });
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Patient access required",
+      });
     }
 
-    const account = await getPatientAccountByPatientId(ctx.user.id);
-    if (!account) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Patient account not found" });
+    // Get patient ID from user
+    const patient = await getPatientBySupabaseId(ctx.user.supabaseId ?? "");
+    if (!patient) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Patient record not found",
+      });
     }
 
-    return await getAppointmentHistory(account.patientId);
+    return await getAppointmentHistory(patient.id);
   }),
 
   getAppointmentDetails: protectedProcedure
     .input(z.object({ appointmentId: z.number() }))
     .query(async ({ input, ctx }) => {
       if (ctx.user?.role !== "patient") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Patient access required" });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Patient access required",
+        });
       }
 
       const appointment = await getAppointmentById(input.appointmentId);
       if (!appointment) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Appointment not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Appointment not found",
+        });
       }
 
-      const account = await getPatientAccountByPatientId(ctx.user.id);
-      if (!account || appointment.patientId !== account.patientId) {
+      // Get patient ID from user
+      const patient = await getPatientBySupabaseId(ctx.user.supabaseId ?? "");
+      if (!patient || appointment.patientId !== patient.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Unauthorized" });
       }
 
-      const db = drizzle(process.env.DATABASE_URL!);
-      const doctor = await db.select().from(doctors).where(eq(doctors.id, appointment.doctorId)).limit(1);
+      const { doctors } = await import("../drizzle/schema");
+      const { getDb } = await import("./db");
+      const db = await getDb();
+
+      const doctor = db
+        ? await db
+            .select()
+            .from(doctors)
+            .where(eq(doctors.id, appointment.doctorId))
+            .limit(1)
+        : [];
       const visitNote = await getVisitNotesByAppointment(appointment.id);
 
       return {

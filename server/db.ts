@@ -169,6 +169,38 @@ export async function getPatientById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+// Get patient by Supabase ID (via user lookup)
+export async function getPatientBySupabaseId(supabaseId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  try {
+    // First get the user by supabaseId
+    const user = await getUserBySupabaseId(supabaseId);
+    if (!user) return undefined;
+
+    // Then get the patient by userId
+    const { patients } = await import("../drizzle/schema");
+    const { users } = await import("../drizzle/schema");
+
+    // Since we don't have a direct patient-user relationship in the schema,
+    // we need to check if there's a patientAccounts entry or return the patient
+    // based on the user's email matching patient email
+
+    // For now, return patient matching the user's email
+    const result = await db
+      .select()
+      .from(patients)
+      .where(eq(patients.email, user.email ?? ""))
+      .limit(1);
+
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    console.error("[Database] Error getting patient by Supabase ID:", error);
+    return undefined;
+  }
+}
+
 export async function searchPatients(query: string) {
   const db = await getDb();
   if (!db) return [];
