@@ -43,6 +43,7 @@ import {
   signOut,
   signUp,
 } from "./_core/supabase";
+import { storageRouter } from "./_core/storageRouter";
 
 // Helper to check if user is admin
 function requireAdmin(ctx: any) {
@@ -133,20 +134,14 @@ export const appRouter = router({
       }),
 
     loginWithOAuth: publicProcedure
-      .input(
-        z.object({
-          provider: z.enum(["google", "github"]),
-        })
-      )
+      .input(z.object({ provider: z.enum(["google", "github"]) }))
       .mutation(async ({ input, ctx }) => {
         if (ENV.supabaseUrl && ENV.supabaseAnonKey) {
           const { url } = await signInWithOAuth(
             ctx.req as any,
             ctx.res,
             input.provider,
-            {
-              redirectTo: `${ENV.publicAppUrl}/auth/callback`,
-            }
+            { redirectTo: `${ENV.publicAppUrl}/auth/callback` }
           );
           return { url };
         }
@@ -185,10 +180,10 @@ export const appRouter = router({
           await updateUserPassword(ctx.req as any, ctx.res, input.newPassword);
           return { success: true };
         }
-          throw new TRPCError({
-            code: "NOT_IMPLEMENTED",
-            message: "Supabase not configured",
-          });
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: "Supabase not configured",
+        });
       }),
   }),
 
@@ -551,6 +546,7 @@ export const appRouter = router({
       }),
   }),
   patientPortal: patientPortalRouter,
+  storage: storageRouter,
 });
 
 export type AppRouter = typeof appRouter;

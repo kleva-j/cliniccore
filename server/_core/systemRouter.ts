@@ -1,17 +1,13 @@
-import { z } from "zod";
-import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
+import { notifyOwner } from "./notification";
+import { z } from "zod";
 
 export const systemRouter = router({
   health: publicProcedure
     .input(
-      z.object({
-        timestamp: z.number().min(0, "timestamp cannot be negative"),
-      })
+      z.object({ timestamp: z.number().min(0, "timestamp cannot be negative") })
     )
-    .query(() => ({
-      ok: true,
-    })),
+    .query(() => ({ ok: true })),
 
   notifyOwner: adminProcedure
     .input(
@@ -22,8 +18,6 @@ export const systemRouter = router({
     )
     .mutation(async ({ input }) => {
       const delivered = await notifyOwner(input);
-      return {
-        success: delivered,
-      } as const;
+      return { success: delivered } as const;
     }),
 });

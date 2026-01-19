@@ -28,7 +28,9 @@ Phase 1 is complete. The following artifacts have been created:
 
 1. **`.env.example`** - Template for Supabase environment variables
 2. **`client/src/const.ts`** - Updated with Supabase configuration
-3. **`SUPABASE-SETUP-GUIDE.md`** - Step-by-step setup guide
+3. **`SUPABASE-MIGRATION-PLAN.md`** - 7-phase migration roadmap
+4. **`SUPABASE-SETUP-GUIDE.md`** - Step-by-step setup guide
+5. **`todo-supabase-phase1.md`** - Phase 1 tracking
 
 ### User Action Required:
 
