@@ -56,10 +56,7 @@ export function useAuth(options?: UseAuthOptions) {
     setError(null);
     try {
       const { data, error: signInError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        await supabase.auth.signInWithPassword({ email, password });
 
       if (signInError) {
         throw signInError;
@@ -110,9 +107,7 @@ export function useAuth(options?: UseAuthOptions) {
     try {
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
 
       if (oauthError) {
@@ -150,9 +145,7 @@ export function useAuth(options?: UseAuthOptions) {
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email,
-        {
-          redirectTo: `${window.location.origin}/reset-password`,
-        }
+        { redirectTo: `${window.location.origin}/reset-password` }
       );
 
       if (resetError) {
@@ -168,7 +161,7 @@ export function useAuth(options?: UseAuthOptions) {
   }, []);
 
   const state = useMemo(() => {
-    localStorage.setItem("manus-runtime-user-info", JSON.stringify(user));
+    localStorage.setItem("cliniccore-runtime-user-info", JSON.stringify(user));
     return {
       user: user ?? null,
       loading,

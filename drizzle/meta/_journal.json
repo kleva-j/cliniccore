@@ -8,6 +8,13 @@
       "when": 1768497936283,
       "tag": "0000_curious_shocker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1768842006400,
+      "tag": "0001_large_the_stranger",
+      "breakpoints": true
     }
   ]
 }

@@ -1,30 +1,24 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { getLoginUrl } from "@/const";
-import { Streamdown } from 'streamdown';
+import { Features } from "@/components/layout/Features";
+import { Workflow } from "@/components/layout/Workflow";
+import { HeroSection } from "@/components/layout/Hero";
+import { Footer } from "@/components/layout/Footer";
+import { Header } from "@/components/layout/Header";
+import { Stats } from "@/components/layout/Stats";
+import { FAQ } from "@/components/layout/FAQ";
+import { CTA } from "@/components/layout/CTA";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
-
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
-
   return (
     <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
+      <main className="antialiased selection:bg-indigo-100 selection:text-indigo-900 bg-slate-50 text-slate-600 font-jakarta">
+        <Header />
+        <HeroSection />
+        <Stats />
+        <Features />
+        <Workflow />
+        <FAQ />
+        <CTA />
+        <Footer />
       </main>
     </div>
   );

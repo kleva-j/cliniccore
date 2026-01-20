@@ -49,14 +49,8 @@ export async function createContext(
       user = null;
     }
   } else {
-    // Fallback to legacy SDK authentication during migration
-    try {
-      const { sdk } = await import("./sdk");
-      user = await sdk.authenticateRequest(opts.req);
-    } catch (error) {
-      // Authentication is optional for public procedures.
-      user = null;
-    }
+    // No authentication configured
+    user = null;
   }
 
   return {

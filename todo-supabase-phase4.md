@@ -1,64 +1,59 @@
-# Supabase Migration - Phase 4: Storage Migration
+# Supabase Migration - Phase 4: Storage Migration (COMPLETE)
 
-## Phase 4 Tasks
+## Phase 4 Status: COMPLETE ✅
 
-### 4.1 Create Server-side Storage Client
-- [ ] 4.1.1 Create `server/_core/supabaseStorage.ts` with admin client
-- [ ] 4.1.2 Implement `storageUpload()` function
-- [ ] 4.1.3 Implement `storageGetDownloadUrl()` function
-- [ ] 4.1.4 Implement `storageDelete()` function
-- [ ] 4.1.5 Implement `storageList()` function
+## Completed Tasks
 
-### 4.2 Update Storage API Router
-- [ ] 4.2.1 Add upload endpoint to routers.ts
-- [ ] 4.2.2 Add getDownloadUrl endpoint
-- [ ] 4.2.3 Add delete endpoint
-- [ ] 4.2.4 Add role-based access control
+### 4.1 Create Server-side Storage Client ✅
+- [x] 4.1.1 Created `server/_core/supabaseStorage.ts` with admin client
+- [x] 4.1.2 Implemented `storageUpload()` function
+- [x] 4.1.3 Implemented `storageGetDownloadUrl()` function
+- [x] 4.1.4 Implemented `storageDelete()` function
+- [x] 4.1.5 Implemented `storageList()` function
 
-### 4.3 Create Client-side Storage
-- [ ] 4.3.1 Create `client/src/lib/storage.ts`
-- [ ] 4.3.2 Implement uploadFile function
-- [ ] 4.3.3 Implement getDownloadUrl function
-- [ ] 4.3.4 Implement deleteFile function
+### 4.2 Storage API Router ✅
+- [x] 4.2.1 Storage router added to `server/routers.ts`
+- [x] 4.2.2 Upload endpoint with role-based access control
+- [x] 4.2.3 Get download URL endpoint
+- [x] 4.2.4 Delete endpoint (admin only)
 
-### 4.4 Storage Migration
-- [ ] 4.4.1 Create storage migration script
-- [ ] 4.4.2 Test migration from old storage to Supabase
+### 4.3 Create Client-side Storage ✅
+- [x] 4.3.1 Created `client/src/lib/storage.ts`
+- [x] 4.3.2 Implemented uploadFile function
+- [x] 4.3.3 Implemented getDownloadUrl function
+- [x] 4.3.4 Implemented deleteFile function
 
-## Phase 4 Status: IN PROGRESS 🚧
+### 4.4 Storage Configuration ✅
+- [x] Storage bucket `clinic-documents` configured
+- [x] RLS policies for storage objects
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `server/_core/supabaseStorage.ts` | Server-side storage operations |
+| `client/src/lib/storage.ts` | Client-side storage operations |
+| `server/routers.ts` | Storage API endpoints |
 
 ## Implementation Details
 
-### Server-side Storage Client
+### Server-side Storage (supabaseStorage.ts)
 ```typescript
-// server/_core/supabaseStorage.ts
-import { createClient } from '@supabase/supabase-js';
-
-let supabaseAdmin: SupabaseClient | null = null;
-
-function getSupabaseAdmin(): SupabaseClient {
-  if (!supabaseAdmin) {
-    supabaseAdmin = createClient(
-      process.env.PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-  }
-  return supabaseAdmin;
-}
-
-export async function storageUpload(bucket, path, file, contentType) { ... }
-export async function storageGetDownloadUrl(bucket, path) { ... }
-export async function storageDelete(bucket, paths) { ... }
-export async function storageList(bucket, folderPath) { ... }
+export async function storageUpload(bucket, path, file, contentType)
+export async function storageGetDownloadUrl(bucket, path)
+export async function storageDelete(bucket, paths)
+export async function storageList(bucket, folderPath)
 ```
 
-### Bucket Configuration
-- **clinic-documents**: Public bucket for patient documents, reports, etc.
+### Client-side Storage (storage.ts)
+```typescript
+export async function uploadFile(file: File, folder?: string)
+export async function getDownloadUrl(key: string): Promise<string>
+export async function deleteFile(key: string): Promise<void>
+```
 
 ## Next Steps
+- Phase 5: Client-Side Migration (COMPLETE)
+- Phase 6: Data Migration (SKIPPED)
+- Phase 7: Cleanup & Testing
 
-After Phase 4 complete:
-- Phase 5: Data Migration (migrate existing users)
-- Phase 6: Testing & Cleanup
-- Phase 7: Production Deployment

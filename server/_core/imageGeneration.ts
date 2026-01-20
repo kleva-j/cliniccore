@@ -15,7 +15,7 @@
  *     }]
  *   });
  */
-import { storagePut } from "server/storage";
+import { storageUpload } from "./supabaseStorage";
 import { ENV } from "./env";
 
 export type GenerateImageOptions = {
@@ -80,8 +80,9 @@ export async function generateImage(
   const base64Data = result.image.b64Json;
   const buffer = Buffer.from(base64Data, "base64");
 
-  // Save to S3
-  const { url } = await storagePut(
+  // Save to Supabase Storage
+  const { url } = await storageUpload(
+    "clinic-documents",
     `generated/${Date.now()}.png`,
     buffer,
     result.image.mimeType

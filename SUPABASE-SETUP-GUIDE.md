@@ -197,12 +197,74 @@ DATABASE_URL=postgresql://...
 - Check policy syntax in Supabase SQL Editor
 - Test policies with `supabase.auth.getSession()` to see user context
 
-## Next Steps
+## Migration Status
 
-After setup is complete:
-1. Proceed to Phase 2: Database Schema Migration
-2. Update `todo-supabase-phase1.md` to mark as complete
-3. Move to Phase 2 implementation
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ Complete | Supabase Setup & Configuration |
+| Phase 2 | ✅ Complete | Database Schema Migration |
+| Phase 3 | ✅ Complete | Backend Auth Migration |
+| Phase 4 | ✅ Complete | Storage Migration |
+| Phase 5 | ✅ Complete | Client-Side Migration |
+| Phase 6 | ⏭️ Skipped | Data Migration |
+| Phase 7 | 🔄 **IN PROGRESS** | Cleanup & Testing |
+
+## Phase 7: Cleanup & Testing (Current)
+
+### Files to Remove (After Successful Testing)
+After verifying all authentication flows work correctly with Supabase:
+
+- `server/_core/oauth.ts` - Old OAuth callback routes
+- `server/_core/sdk.ts` - Legacy Manus SDK authentication
+- `server/storage.ts` - Old storage implementation
+- `server/_core/storageRouter.ts` - Old storage router
+
+### Environment Variables to Remove (After Migration)
+- `OAUTH_SERVER_URL` from `server/_core/env.ts`
+- `VITE_APP_ID` from client config
+- `JWT_SECRET` (session cookies no longer used)
+- `BUILT_IN_FORGE_API_URL` and `BUILT_IN_FORGE_API_KEY`
+- `OWNER_OPEN_ID`
+
+### Testing Checklist
+
+Run through these tests to verify the migration:
+
+- [ ] Login with email/password works
+- [ ] Google OAuth login works (if configured)
+- [ ] GitHub OAuth login works (if configured)
+- [ ] Registration creates new user
+- [ ] Password reset email is sent
+- [ ] Session persists after page refresh
+- [ ] Logout clears session properly
+- [ ] File upload to Supabase Storage works
+- [ ] File download with signed URL works
+- [ ] Role-based access control still works:
+  - Admin dashboard accessible to admins
+  - Doctor dashboard accessible to doctors
+  - Receptionist dashboard accessible to receptionists
+  - Patient portal accessible to patients
+
+### Rollback Plan
+
+If issues arise during testing:
+
+1. **Restore database**:
+   ```bash
+   psql -U cliniccore_user -d cliniccore < backup_before_supabase_migration.sql
+   ```
+
+2. **Revert environment variables** - add back old OAuth credentials
+
+3. **Re-enable legacy auth** - keep `server/_core/oauth.ts` and `sdk.ts`
+
+## Data Migration Note (Phase 6 Skipped)
+
+Phase 6 (Data Migration) was intentionally skipped. This means:
+- Legacy users with `openId` continue to work for backward compatibility
+- New users will be created with `supabaseId`
+- Patient passwords using SHA-256 hashes cannot be migrated directly
+- Patients will need to use "Forgot Password" to set new passwords
 
 ## Security Best Practices
 
